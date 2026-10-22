@@ -2,6 +2,7 @@ import express from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import type { Db } from 'mongodb';
 import type { createAuth } from './auth.js';
+import { createCardRoutes } from './cards/card-routes.js';
 import { createDeckRoutes } from './decks/deck-routes.js';
 
 type AppOptions = {
@@ -23,6 +24,7 @@ export function createApp({ auth, db }: AppOptions) {
     }
   });
   app.use('/api/decks', createDeckRoutes(auth, db));
+  app.use('/api/cards', createCardRoutes(auth, db));
 
   return app;
 }

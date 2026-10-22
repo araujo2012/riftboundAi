@@ -31,6 +31,15 @@ vi.mock('./auth/auth-client.js', () => ({
   }
 }));
 
+vi.mock('./cards/card-api.js', () => ({
+  CardApiError: mocks.DeckApiError,
+  listCards: vi.fn().mockResolvedValue([]),
+  createCard: vi.fn(),
+  updateCard: vi.fn(),
+  deleteCard: vi.fn(),
+  uploadCardImage: vi.fn()
+}));
+
 vi.mock('./decks/deck-api.js', () => ({
   DeckApiError: mocks.DeckApiError,
   listDecks: mocks.listDecks,
