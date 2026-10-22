@@ -1157,3 +1157,28 @@ The ultimate goal is to create an AI capable of:
 * Learning from generations of competition
 * Playing at a superhuman level
 * Becoming one of the strongest Riftbound players in the world
+
+---
+
+# Local App Development
+
+The current local app uses a MongoDB container named `riftbound` for accounts, sessions, and user-owned decks. MongoDB is bound to `127.0.0.1:27018` by default and persists data in the `riftbound_mongo_data` Docker volume.
+
+Run these commands in PowerShell from the project directory:
+
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+pnpm install
+pnpm db:up
+pnpm dev
+```
+
+Wait until `docker inspect --format '{{.State.Health.Status}}' riftbound` reports `healthy`, then open `http://localhost:5173`. The API listens on port `3001` and is reached by the web app through the Vite proxy.
+
+Replace the sample Mongo password and Better Auth secret in `.env` before sharing this machine. Keep `MONGO_URI` synchronized with the Mongo username, password, and port. If port `27018` is already in use, change `MONGO_PORT` and the port in `MONGO_URI` together. Real `.env` files are ignored by Git.
+
+Stop the app with `Ctrl+C` and stop MongoDB with `pnpm db:down`. This keeps the named volume and its data; do not remove the volume unless you intend to erase the local database.
+
+Run automated checks with `pnpm test`, `pnpm test:api`, `pnpm typecheck`, and `pnpm build`.
+
+Existing browser decks are not migrated or read by the app; their old `localStorage` value is left untouched. Card ingestion is deferred: this setup does not create or populate a card collection.
