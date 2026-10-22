@@ -1,5 +1,7 @@
 import { ArrowLeft, Dices, Hand, RotateCw, Swords } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { useCardCatalog, type CardCatalog } from '../cards/card-catalog.js';
+import { cardTypeLabels, type Card } from '../cards/types.js';
 import {
   drawCard,
   moveCard,
@@ -18,8 +20,12 @@ type GameBoardProps = {
   onChangeDecks: () => void;
 };
 
+type InspectedCard = { name: string; section?: CardInstance['section'] };
+
 const zoneNames: { zone: PlayerZoneName; label: string }[] = [
   { zone: 'base', label: 'Base' },
+  { zone: 'legend', label: 'Lenda' },
+  { zone: 'champion', label: 'Campeão' },
   { zone: 'mainDeck', label: 'Deck principal' },
   { zone: 'hand', label: 'Mão' },
   { zone: 'trash', label: 'Descarte' },
@@ -27,16 +33,35 @@ const zoneNames: { zone: PlayerZoneName; label: string }[] = [
   { zone: 'runeZone', label: 'Runas' }
 ];
 
+const visibleZones = ['legend', 'champion', 'base', 'hand', 'trash', 'runeZone'] as const;
+
 export function GameBoard({ game, onGameChange, onChangeDecks }: GameBoardProps) {
+  const catalog = useCardCatalog();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [hoveredCard, setHoveredCard] = useState<InspectedCard | null>(null);
   const [destinationValue, setDestinationValue] = useState('player-0-trash');
   const selectedCard = findVisibleCard(game, selectedCardId);
+  const inspectedCard = hoveredCard ?? selectedCard ?? null;
 
   function moveSelectedCard(): void {
     if (!selectedCardId) return;
     onGameChange(moveCard(game, selectedCardId, destinationFromValue(destinationValue)));
     setSelectedCardId(null);
   }
+
+  function toggleSelection(cardId: string): void {
+    setSelectedCardId((current) => current === cardId ? null : cardId);
+  }
+
+  const boardProps = {
+    catalog,
+    game,
+    onDraw: (seat: PlayerIndex, pile: 'main' | 'rune') => onGameChange(drawCard(game, seat, pile)),
+    onInspect: setHoveredCard,
+    onSelectCard: toggleSelection,
+    onShuffle: (seat: PlayerIndex, pile: 'main' | 'rune') => onGameChange(shuffleZone(game, seat, pile)),
+    selectedCardId
+  };
 
   return (
     <main className="game-page">
@@ -111,65 +136,77 @@ export function GameBoard({ game, onGameChange, onChangeDecks }: GameBoardProps)
         </div>
       )}
 
-      <div className="table-layout">
-        <PlayerBoard
-          game={game}
-          onDraw={(seat, pile) => onGameChange(drawCard(game, seat, pile))}
-          onSelectCard={setSelectedCardId}
-          onShuffle={(seat, pile) => onGameChange(shuffleZone(game, seat, pile))}
-          seat={1}
-          selectedCardId={selectedCardId}
-        />
+      <div className="game-table">
+        <div className="table-surface">
+          <PlayerBoard {...boardProps} seat={1} />
 
-        <section className="battlefield-row" aria-label="Campos compartilhados">
-          {game.battlefields.map((field, slot) => (
-            <CardZone
-              className={`battlefield-zone battlefield-${slot}`}
-              key={`${slot}-${field.name}`}
-              label={`Campo compartilhado ${slot + 1}`}
-              cards={field.cards}
-              onSelectCard={setSelectedCardId}
-              selectedCardId={selectedCardId}
-              testId={`battlefield-${slot}`}
-            >
-              <div className="battlefield-name">
-                <Swords size={14} aria-hidden="true" />
-                <span>{field.name}</span>
-              </div>
-            </CardZone>
-          ))}
-        </section>
+          <section className="battlefield-row" aria-label="Campos compartilhados">
+            {game.battlefields.map((field, slot) => (
+              <section
+                className={`battlefield-zone battlefield-${slot}`}
+                data-testid={`battlefield-${slot}`}
+                key={`${slot}-${field.name}`}
+              >
+                <header className="zone-heading battlefield-heading">
+                  <h3>Campo compartilhado {slot + 1}</h3>
+                </header>
+                <div className="battlefield-body">
+                  <BattlefieldArt
+                    catalog={catalog}
+                    name={field.name}
+                    onInspect={setHoveredCard}
+                  />
+                  <div className="battlefield-sides">
+                    {([1, 0] as const).map((owner) => (
+                      <CardRow
+                        cards={field.cards.filter((card) => card.owner === owner)}
+                        catalog={catalog}
+                        className={`battlefield-side side-seat-${owner}`}
+                        key={owner}
+                        onInspect={setHoveredCard}
+                        onSelectCard={toggleSelection}
+                        selectedCardId={selectedCardId}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </section>
+            ))}
+          </section>
 
-        <PlayerBoard
-          game={game}
-          onDraw={(seat, pile) => onGameChange(drawCard(game, seat, pile))}
-          onSelectCard={setSelectedCardId}
-          onShuffle={(seat, pile) => onGameChange(shuffleZone(game, seat, pile))}
-          seat={0}
-          selectedCardId={selectedCardId}
-        />
+          <PlayerBoard {...boardProps} seat={0} />
+        </div>
+
+        <CardInspector card={inspectedCard} catalog={catalog} />
       </div>
-      <p className="game-footnote">Mesa livre · arrume as cartas manualmente · {game.players[0].deckName} x {game.players[1].deckName}</p>
+      <p className="game-footnote">Mesa livre · clique numa carta para movê-la · passe o mouse para ampliar · {game.players[0].deckName} x {game.players[1].deckName}</p>
     </main>
   );
 }
 
-function PlayerBoard({
-  game,
-  seat,
-  selectedCardId,
-  onSelectCard,
-  onDraw,
-  onShuffle
-}: {
+type PlayerBoardProps = {
+  catalog: CardCatalog;
   game: GameState;
   seat: PlayerIndex;
   selectedCardId: string | null;
   onSelectCard: (cardId: string) => void;
+  onInspect: (card: InspectedCard | null) => void;
   onDraw: (seat: PlayerIndex, pile: 'main' | 'rune') => void;
   onShuffle: (seat: PlayerIndex, pile: 'main' | 'rune') => void;
-}) {
+};
+
+function PlayerBoard({
+  catalog,
+  game,
+  seat,
+  selectedCardId,
+  onSelectCard,
+  onInspect,
+  onDraw,
+  onShuffle
+}: PlayerBoardProps) {
   const player = game.players[seat];
+  const zoneProps = { catalog, onInspect, onSelectCard, selectedCardId };
 
   return (
     <section
@@ -188,178 +225,334 @@ function PlayerBoard({
         {game.activePlayer === seat && <span className="active-label">EM AÇÃO</span>}
       </header>
 
-      <div className="player-actions">
-        <button className="compact-action" onClick={() => onDraw(seat, 'main')} type="button">
-          <Hand size={15} aria-hidden="true" />
-          Comprar carta
-        </button>
-        <button className="compact-action" onClick={() => onDraw(seat, 'rune')} type="button">
-          <PlusIcon />
-          Comprar runa
-        </button>
-        <button className="compact-action quiet-action" onClick={() => onShuffle(seat, 'main')} type="button">
-          <RotateCw size={14} aria-hidden="true" />
-          Embaralhar deck
-        </button>
-        <button className="compact-action quiet-action" onClick={() => onShuffle(seat, 'rune')} type="button">
-          <Dices size={14} aria-hidden="true" />
-          Embaralhar runas
-        </button>
-      </div>
-
-      <div className="primary-zones">
+      <div className="player-mat">
+        <PileZone
+          area="rune-deck"
+          cards={player.zones.runeDeck}
+          drawLabel="Comprar runa"
+          kind="rune"
+          label="Runas"
+          onDraw={() => onDraw(seat, 'rune')}
+          onShuffle={() => onShuffle(seat, 'rune')}
+          shuffleIcon={<Dices size={13} aria-hidden="true" />}
+          shuffleLabel="Embaralhar runas"
+          testId={`player-${seat}-rune-deck`}
+        />
         <CardZone
-          label={`Base · ${player.zones.base.length}`}
+          {...zoneProps}
+          area="runes"
+          cards={player.zones.runeZone}
+          className="rune-zone"
+          emptyText="Sem runas na zona"
+          label={`Zona de runas · ${player.zones.runeZone.length}`}
+          testId={`player-${seat}-rune-zone`}
+        />
+        <CardZone
+          {...zoneProps}
+          area="base"
           cards={player.zones.base}
-          onSelectCard={onSelectCard}
-          selectedCardId={selectedCardId}
-          testId={`player-${seat}-base`}
+          className="base-zone"
           emptyText="Base vazia"
+          label={`Base · ${player.zones.base.length}`}
+          testId={`player-${seat}-base`}
+        />
+        <CardZone
+          {...zoneProps}
+          area="legend"
+          cards={player.zones.legend}
+          className="slot-zone"
+          emptyText="Lenda"
+          label="Lenda"
+          testId={`player-${seat}-legend`}
+        />
+        <CardZone
+          {...zoneProps}
+          area="champion"
+          cards={player.zones.champion}
+          className="slot-zone"
+          emptyText="Campeão"
+          label="Campeão"
+          testId={`player-${seat}-champion`}
+        />
+        <CardZone
+          {...zoneProps}
+          area="hand"
+          cards={player.zones.hand}
+          className="hand-zone"
+          emptyText="A mão está vazia"
+          label={`Mão · ${player.zones.hand.length}`}
+          testId={`player-${seat}-hand`}
         />
         <PileZone
-          label={`Deck principal · ${player.zones.mainDeck.length}`}
+          area="main-deck"
           cards={player.zones.mainDeck}
+          drawLabel="Comprar carta"
           kind="main"
+          label="Deck"
+          onDraw={() => onDraw(seat, 'main')}
+          onShuffle={() => onShuffle(seat, 'main')}
+          shuffleIcon={<RotateCw size={13} aria-hidden="true" />}
+          shuffleLabel="Embaralhar deck"
           testId={`player-${seat}-main-deck`}
         />
         <CardZone
-          label={`Descarte · ${player.zones.trash.length}`}
+          {...zoneProps}
+          area="trash"
           cards={player.zones.trash}
-          onSelectCard={onSelectCard}
-          selectedCardId={selectedCardId}
-          testId={`player-${seat}-trash`}
+          className="trash-zone"
           emptyText="Sem cartas"
-        />
-      </div>
-
-      <CardZone
-        className="hand-zone"
-        label={`Mão · ${player.zones.hand.length}`}
-        cards={player.zones.hand}
-        onSelectCard={onSelectCard}
-        selectedCardId={selectedCardId}
-        testId={`player-${seat}-hand`}
-        emptyText="A mão está vazia"
-      />
-
-      <div className="rune-zones">
-        <CardZone
-          label={`Zona de runas · ${player.zones.runeZone.length}`}
-          cards={player.zones.runeZone}
-          onSelectCard={onSelectCard}
-          selectedCardId={selectedCardId}
-          testId={`player-${seat}-rune-zone`}
-          emptyText="Sem runas na zona"
-        />
-        <PileZone
-          label={`Deck de runas · ${player.zones.runeDeck.length}`}
-          cards={player.zones.runeDeck}
-          kind="rune"
-          testId={`player-${seat}-rune-deck`}
+          label={`Descarte · ${player.zones.trash.length}`}
+          testId={`player-${seat}-trash`}
         />
       </div>
     </section>
   );
 }
 
-function CardZone({
-  label,
-  cards,
-  onSelectCard,
-  selectedCardId,
-  testId,
-  className = '',
-  emptyText,
-  children
-}: {
-  label: string;
+type CardRowProps = {
+  catalog: CardCatalog;
   cards: CardInstance[];
-  onSelectCard: (cardId: string) => void;
   selectedCardId: string | null;
-  testId: string;
+  onSelectCard: (cardId: string) => void;
+  onInspect: (card: InspectedCard | null) => void;
   className?: string;
   emptyText?: string;
+};
+
+function CardRow({ catalog, cards, selectedCardId, onSelectCard, onInspect, className = '', emptyText }: CardRowProps) {
+  return (
+    <div className={`zone-cards ${className}`}>
+      {cards.length ? (
+        cards.map((card) => (
+          <GameCard
+            card={card}
+            catalogCard={catalog.find(card.name)}
+            key={card.id}
+            onInspect={onInspect}
+            onSelect={onSelectCard}
+            selected={selectedCardId === card.id}
+          />
+        ))
+      ) : (
+        emptyText && <span className="zone-empty">{emptyText}</span>
+      )}
+    </div>
+  );
+}
+
+function CardZone({
+  label,
+  area,
+  testId,
+  className = '',
+  children,
+  ...rowProps
+}: CardRowProps & {
+  label: string;
+  area: string;
+  testId: string;
   children?: ReactNode;
 }) {
   return (
-    <section className={`card-zone ${className}`} data-testid={testId}>
+    <section className={`card-zone ${className}`} data-testid={testId} style={{ gridArea: area }}>
       <header className="zone-heading">
         <h3>{label}</h3>
       </header>
       {children}
-      <div className="zone-cards">
-        {cards.length ? (
-          cards.map((card) => (
-            <CardTile
-              card={card}
-              key={card.id}
-              onSelect={onSelectCard}
-              selected={selectedCardId === card.id}
-            />
-          ))
-        ) : (
-          <span className="zone-empty">{emptyText ?? 'Vazio'}</span>
-        )}
-      </div>
+      <CardRow {...rowProps} />
     </section>
   );
 }
 
 function PileZone({
   label,
+  area,
   cards,
   kind,
-  testId
+  testId,
+  drawLabel,
+  shuffleLabel,
+  shuffleIcon,
+  onDraw,
+  onShuffle
 }: {
   label: string;
+  area: string;
   cards: CardInstance[];
   kind: 'main' | 'rune';
   testId: string;
+  drawLabel: string;
+  shuffleLabel: string;
+  shuffleIcon: ReactNode;
+  onDraw: () => void;
+  onShuffle: () => void;
 }) {
   return (
-    <section className={`card-zone pile-zone ${kind}-pile`} data-testid={testId}>
-      <header className="zone-heading"><h3>{label}</h3></header>
-      <div className="pile-stack" aria-hidden="true">
-        <div className="pile-card pile-card-back"><span>R</span></div>
-        <span>{cards.length} cartas</span>
-      </div>
-      <span className="pile-caption">{kind === 'main' ? 'COMPRA NO TOPO' : 'RESERVA DE RUNAS'}</span>
+    <section className={`card-zone pile-zone ${kind}-pile`} data-testid={testId} style={{ gridArea: area }}>
+      <header className="zone-heading">
+        <h3>{label}</h3>
+        <button
+          aria-label={shuffleLabel}
+          className="pile-shuffle"
+          onClick={onShuffle}
+          title={shuffleLabel}
+          type="button"
+        >
+          {shuffleIcon}
+        </button>
+      </header>
+      <button
+        aria-label={drawLabel}
+        className="pile-stack"
+        disabled={cards.length === 0}
+        onClick={onDraw}
+        title={drawLabel}
+        type="button"
+      >
+        {cards.length > 0 ? <CardBack kind={kind} /> : <span className="pile-empty">Vazio</span>}
+        <span className="pile-count">{cards.length}</span>
+      </button>
     </section>
   );
 }
 
-function CardTile({
+function CardBack({ kind }: { kind: 'main' | 'rune' }) {
+  return (
+    <span className={`card-back card-back-${kind}`} aria-hidden="true">
+      <span className="card-back-emblem" />
+    </span>
+  );
+}
+
+function GameCard({
   card,
+  catalogCard,
   selected,
-  onSelect
+  onSelect,
+  onInspect
 }: {
   card: CardInstance;
+  catalogCard: Card | undefined;
   selected: boolean;
   onSelect: (cardId: string) => void;
+  onInspect: (card: InspectedCard | null) => void;
 }) {
+  const domain = catalogCard?.domains[0]?.toLowerCase() ?? 'colorless';
+
   return (
     <button
       aria-pressed={selected}
       aria-label={`Selecionar carta ${card.name}`}
-      className={`card-tile${selected ? ' is-selected' : ''}`}
+      className={`game-card domain-${domain} owner-${card.owner}${selected ? ' is-selected' : ''}`}
+      onBlur={() => onInspect(null)}
       onClick={() => onSelect(card.id)}
+      onFocus={() => onInspect(card)}
+      onMouseEnter={() => onInspect(card)}
+      onMouseLeave={() => onInspect(null)}
+      title={card.name}
       type="button"
     >
-      <span className={`card-type-mark type-${card.section.toLowerCase()}`} />
-      <span className="card-tile-name">{card.name}</span>
+      <CardFace card={catalogCard} name={card.name} section={card.section} />
     </button>
   );
 }
 
-function PlusIcon() {
-  return <span aria-hidden="true" className="plus-icon">+</span>;
+function CardFace({ card, name, section }: { card: Card | undefined; name: string; section?: CardInstance['section'] | undefined }) {
+  if (card?.imageUrl) {
+    return <img alt="" className="card-face-image" draggable={false} loading="lazy" src={card.imageUrl} />;
+  }
+
+  const cost = card?.energyCost;
+  return (
+    <span className={`card-face-text type-${(section ?? 'maindeck').toLowerCase()}`}>
+      {cost !== null && cost !== undefined && <span className="card-face-cost">{cost}</span>}
+      <span className="card-face-name">{name}</span>
+      {card && <span className="card-face-type">{cardTypeLabels[card.type]}</span>}
+    </span>
+  );
+}
+
+function BattlefieldArt({
+  catalog,
+  name,
+  onInspect
+}: {
+  catalog: CardCatalog;
+  name: string;
+  onInspect: (card: InspectedCard | null) => void;
+}) {
+  const card = catalog.find(name);
+  const hasField = name !== 'Campo vazio';
+
+  return (
+    <div
+      className={`battlefield-art${card?.imageUrl ? ' has-image' : ''}`}
+      onMouseEnter={() => hasField && onInspect({ name, section: 'Battlefields' })}
+      onMouseLeave={() => onInspect(null)}
+    >
+      {card?.imageUrl && <LandscapeImage src={card.imageUrl} />}
+      <div className="battlefield-name">
+        <Swords size={14} aria-hidden="true" />
+        <span>{name}</span>
+      </div>
+    </div>
+  );
+}
+
+// Battlefield cards are printed sideways, so catalog scans usually arrive in
+// portrait; rotate those to sit flat on the table.
+function LandscapeImage({ src }: { src: string }) {
+  const [isPortrait, setIsPortrait] = useState(false);
+
+  return (
+    <div className="landscape-frame">
+      <img
+        alt=""
+        className={isPortrait ? 'is-rotated' : undefined}
+        draggable={false}
+        onLoad={(event) => setIsPortrait(event.currentTarget.naturalHeight > event.currentTarget.naturalWidth)}
+        src={src}
+      />
+    </div>
+  );
+}
+
+function CardInspector({ card, catalog }: { card: InspectedCard | null; catalog: CardCatalog }) {
+  const details = card ? catalog.find(card.name) : undefined;
+
+  return (
+    <aside aria-label="Detalhes da carta" className="card-inspector">
+      {card ? (
+        <>
+          {details?.type === 'Battlefield' && details.imageUrl ? (
+            <div className="inspector-art is-landscape"><LandscapeImage src={details.imageUrl} /></div>
+          ) : (
+            <div className="inspector-art">
+              <CardFace card={details} name={card.name} section={card.section} />
+            </div>
+          )}
+          <div className="inspector-body">
+            <h2>{card.name}</h2>
+            {details && <p className="inspector-type">{cardTypeLabels[details.type]}{details.tags.length > 0 && ` · ${details.tags.join(' · ')}`}</p>}
+            {details?.rulesText && <p className="inspector-rules">{details.rulesText}</p>}
+            {!details && <p className="inspector-missing">Carta sem cadastro no catálogo.</p>}
+          </div>
+        </>
+      ) : (
+        <div className="inspector-empty">
+          <CardBack kind="main" />
+          <span>Passe o mouse sobre uma carta para ampliar</span>
+        </div>
+      )}
+    </aside>
+  );
 }
 
 function findVisibleCard(game: GameState, cardId: string | null): CardInstance | undefined {
   if (!cardId) return undefined;
 
   for (const player of game.players) {
-    for (const zoneName of ['base', 'hand', 'trash', 'runeZone'] as const) {
+    for (const zoneName of visibleZones) {
       const card = player.zones[zoneName].find(({ id }) => id === cardId);
       if (card) return card;
     }

@@ -11,6 +11,8 @@ export type CardInstance = {
 };
 
 export type PlayerZoneName =
+  | 'legend'
+  | 'champion'
   | 'base'
   | 'mainDeck'
   | 'hand'
@@ -50,6 +52,8 @@ type CardLocation =
   | { type: 'battlefield'; slot: PlayerIndex };
 
 const playerZoneNames: PlayerZoneName[] = [
+  'legend',
+  'champion',
   'base',
   'mainDeck',
   'hand',
@@ -208,7 +212,8 @@ function createPlayer(
   owner: PlayerIndex,
   seed: number
 ): { player: GamePlayer; randomSeed: number } {
-  const base = expandCards(deck, owner, ['Legend', 'Champion']);
+  const legend = expandCards(deck, owner, ['Legend']);
+  const champion = expandCards(deck, owner, ['Champion']);
   const mainDeck = shuffleCards(expandCards(deck, owner, ['MainDeck']), seed);
   const runeDeck = shuffleCards(expandCards(deck, owner, ['Runes']), mainDeck.seed);
 
@@ -217,7 +222,9 @@ function createPlayer(
       deckId: deck.id,
       deckName: deck.name,
       zones: {
-        base,
+        legend,
+        champion,
+        base: [],
         mainDeck: mainDeck.cards,
         hand: [],
         trash: [],

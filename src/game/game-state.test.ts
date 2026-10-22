@@ -38,13 +38,12 @@ describe('game state', () => {
     { section: 'Battlefields', quantity: 1, cardName: 'Field C' }
   ]);
 
-  it('sets up both seats, base cards, decks, runes, and two shared battlefields', () => {
+  it('sets up both seats, legend and champion zones, decks, runes, and two shared battlefields', () => {
     const game = createGame([deckA, deckB], ['Field A', 'Field C'], 42);
 
-    expect(playerAt(game, 0).zones.base.map((card) => card.name)).toEqual([
-      'Legend A',
-      'Champion A'
-    ]);
+    expect(playerAt(game, 0).zones.legend.map((card) => card.name)).toEqual(['Legend A']);
+    expect(playerAt(game, 0).zones.champion.map((card) => card.name)).toEqual(['Champion A']);
+    expect(playerAt(game, 0).zones.base).toEqual([]);
     expect(playerAt(game, 0).zones.mainDeck).toHaveLength(2);
     expect(playerAt(game, 0).zones.runeDeck).toHaveLength(2);
     expect(game.battlefields.map((field) => field.name)).toEqual([
