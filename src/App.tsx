@@ -119,8 +119,10 @@ export default function App() {
     return <div className="app-shell"><AuthPanel /></div>;
   }
 
+  const isTableMode = !isAdminMode && activeTab === 'game' && game !== null;
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell${isTableMode ? ' is-table-mode' : ''}`}>
       <header className="app-header">
         <a
           aria-label="Riftbound Simulator início"

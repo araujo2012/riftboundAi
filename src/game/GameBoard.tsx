@@ -78,9 +78,51 @@ export function GameBoard({ game, onGameChange, onChangeDecks }: GameBoardProps)
           </button>
           <div>
             <p className="eyebrow">PARTIDA LOCAL</p>
-            <h1>Mesa de jogo</h1>
+            <h1 title={`${game.players[0].deckName} x ${game.players[1].deckName}`}>Mesa de jogo</h1>
           </div>
         </div>
+        {selectedCard && (
+          <div className="selection-toolbar" role="region" aria-label="Mover carta selecionada">
+            <div className="selection-copy">
+              <span className="selection-mark"><Hand size={15} aria-hidden="true" /></span>
+              <span><strong>{selectedCard.name}</strong> selecionada</span>
+            </div>
+            <label htmlFor="card-destination">Destino da carta selecionada</label>
+            <select
+              id="card-destination"
+              onChange={(event) => setDestinationValue(event.target.value)}
+              value={destinationValue}
+            >
+              <optgroup label="Jogador 1">
+                {zoneNames.map(({ zone, label }) => (
+                  <option key={`p0-${zone}`} value={`player-0-${zone}`}>Jogador 1 · {label}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Jogador 2">
+                {zoneNames.map(({ zone, label }) => (
+                  <option key={`p1-${zone}`} value={`player-1-${zone}`}>Jogador 2 · {label}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Compartilhado">
+                <option value="field-0">Campo compartilhado 1</option>
+                <option value="field-1">Campo compartilhado 2</option>
+              </optgroup>
+              <option value="banished">Banir carta</option>
+            </select>
+            <button className="button button-primary move-button" onClick={moveSelectedCard} type="button">
+              Mover carta
+            </button>
+            <button
+              aria-label="Cancelar seleção"
+              className="icon-button close-selection"
+              onClick={() => setSelectedCardId(null)}
+              title="Cancelar seleção"
+              type="button"
+            >
+              ×
+            </button>
+          </div>
+        )}
         <div className="turn-controls">
           <span className="turn-indicator">
             <span className={`turn-dot seat-${game.activePlayer}`} />
@@ -92,49 +134,6 @@ export function GameBoard({ game, onGameChange, onChangeDecks }: GameBoardProps)
           </button>
         </div>
       </div>
-
-      {selectedCard && (
-        <div className="selection-toolbar" role="region" aria-label="Mover carta selecionada">
-          <div className="selection-copy">
-            <span className="selection-mark"><Hand size={15} aria-hidden="true" /></span>
-            <span><strong>{selectedCard.name}</strong> selecionada</span>
-          </div>
-          <label htmlFor="card-destination">Destino da carta selecionada</label>
-          <select
-            id="card-destination"
-            onChange={(event) => setDestinationValue(event.target.value)}
-            value={destinationValue}
-          >
-            <optgroup label="Jogador 1">
-              {zoneNames.map(({ zone, label }) => (
-                <option key={`p0-${zone}`} value={`player-0-${zone}`}>Jogador 1 · {label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Jogador 2">
-              {zoneNames.map(({ zone, label }) => (
-                <option key={`p1-${zone}`} value={`player-1-${zone}`}>Jogador 2 · {label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Compartilhado">
-              <option value="field-0">Campo compartilhado 1</option>
-              <option value="field-1">Campo compartilhado 2</option>
-            </optgroup>
-            <option value="banished">Banir carta</option>
-          </select>
-          <button className="button button-primary move-button" onClick={moveSelectedCard} type="button">
-            Mover carta
-          </button>
-          <button
-            aria-label="Cancelar seleção"
-            className="icon-button close-selection"
-            onClick={() => setSelectedCardId(null)}
-            title="Cancelar seleção"
-            type="button"
-          >
-            ×
-          </button>
-        </div>
-      )}
 
       <div className="game-table">
         <div className="table-surface">
@@ -179,7 +178,6 @@ export function GameBoard({ game, onGameChange, onChangeDecks }: GameBoardProps)
 
         <CardInspector card={inspectedCard} catalog={catalog} />
       </div>
-      <p className="game-footnote">Mesa livre · clique numa carta para movê-la · passe o mouse para ampliar · {game.players[0].deckName} x {game.players[1].deckName}</p>
     </main>
   );
 }
